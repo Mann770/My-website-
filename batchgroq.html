@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Groq API Request</title>
+</head>
+<body>
+    <h1>Send Request to Groq API</h1>
+    <form id="groqForm">
+        <label for="apiKey">API Key:</label><br>
+        <input type="text" id="apiKey" name="apiKey" required><br><br>
+
+        <label for="model">Select Model:</label><br>
+        <select id="model" name="model" required>
+            <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
+            <!-- Add more models as needed -->
+        </select><br><br>
+
+        <label for="temperature">Temperature:</label><br>
+        <input type="number" id="temperature" name="temperature" min="0" max="1" step="0.1" value="0.7"><br><br>
+
+        <label for="maxTokens">Max Tokens:</label><br>
+        <input type="number" id="maxTokens" name="maxTokens" min="1" value="150"><br><br>
+
+        <label for="topP">Top P:</label><br>
+        <input type="number" id="topP" name="topP" min="0" max="1" step="0.1" value="0.9"><br><br>
+
+        <label for="prompt">Enter your prompt:</label><br>
+        <textarea id="prompt" name="prompt" rows="4" cols="50" required></textarea><br><br>
+
+        <label for="batch">Batch Request:</label>
+        <input type="checkbox" id="batch" name="batch"><br><br>
+
+        <input type="submit" value="Send Request">
+    </form>
+    <div id="response"></div>
+
+    <script>
+        // Check if API key is already stored
+        if (localStorage.getItem('apiKey')) {
+            document.getElementById('apiKey').value = localStorage.getItem('apiKey');
+        }
+
+        document.getElementById('groqForm').addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent the default form submission
+
+            const apiKey = document.getElementById('apiKey').value;
+            const model = document.getElementById('model').value;
+            const temperature = parseFloat(document.getElementById('temperature').value);
+            const maxTokens = parseInt(document.getElementById('maxTokens').value);
+            const topP = parseFloat(document.getElementById('topP').value);
+            const prompt = document.getElementById('prompt').value;
+            const isBatch = document.getElementById('batch').checked;
+
+            // Store API key in localStorage
+            localStorage.setItem('apiKey', apiKey);
+
+            const payload = {
+                model: model,
+                messages: [
+                    {
+                        role: 'user',
+                        content: prompt
+                    }
+                ],
+                temperature: temperature,
+                max_tokens: maxTokens,
+                top_p: topP
+            };
+
+            const requestOptions = {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify(payload)
+            };
+
+            if (isBatch) {
+                // Handle batch request
+                const prompts = prompt.split('\n').filter(p => p.trim() !== '');
+                const batchResponses = [];
+
+                prompts.forEach((singlePrompt, index) => {
+                    const batchPayload = { ...payload, messages: [{ role: 'user', content: singlePrompt }] };
+                    fetch('https://api.groq.com/openai/v1/chat/completions', {
+                        ...requestOptions,
+                        body: JSON.stringify(batchPayload)
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        batchResponses.push(data);
+                        if (batchResponses.length === prompts.length) {
+                            displayResponse(batchResponses);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        displayResponse('An error occurred.');
+                    });
+                });
+            } else {
+                // Handle single request
+                fetch('https://api.groq.com/openai/v1/chat/completions', requestOptions)
+                    .then(response => response.json())
+                    .then(data => {
+                        displayResponse(data);
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        displayResponse('An error occurred.');
+                    });
+            }
+        });
+
+        function displayResponse(data) {
+            const responseDiv = document.getElementById('response');
+            if (typeof data === 'string') {
+                responseDiv.innerText = data;
+            } else {
+                if (data.choices && data.choices[0] && data.choices[0].message) {
+                    responseDiv.innerText = data.choices[0].message.content;
+                } else {
+                    responseDiv.innerText = 'No response from API.';
+                }
+            }
+        }
+    </script>
+</body>
+</html>
